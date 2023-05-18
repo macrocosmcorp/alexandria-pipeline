@@ -73,12 +73,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--checkpoint_size', type=int, default=100)
+    parser.add_argument('--start_checkpoint', type=int, default=0)
     parser.add_argument('--type', type=str, required=True)
     parser.add_argument('--test', action='store_true')
     args = parser.parse_args()
 
     BATCH_SIZE = args.batch_size
     CHECKPOINT_SIZE = args.checkpoint_size
+    CHECKPOINT_START = args.start_checkpoint
     PROMPT = ''
     TYPE = args.type
     if TYPE == 'title':
@@ -117,6 +119,10 @@ if __name__ == "__main__":
 
     # Load and process parquet
     batch_id, start_line = load_checkpoint(output_path)
+
+    # if CHECKPOINT_START != 0:
+    #     start_line = CHECKPOINT_START * BATCH_SIZE
+    
     dataset = ParquetDataset('datasets/arxiv2M.parquet',
                              start_line, TYPE, crop=TEST, batch_size=BATCH_SIZE)
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, num_workers=4)
