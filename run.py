@@ -152,5 +152,6 @@ if __name__ == "__main__":
             all_data = save_embeddings(output_path, batch_id, all_data)
             batch_id += 1
 
+    print(f'Saving final checkpoint {batch_id}, progress {line_num}')
     save_embeddings(output_path, batch_id, all_data)
 
