@@ -123,7 +123,7 @@ if __name__ == "__main__":
     # if CHECKPOINT_START != 0:
     #     start_line = CHECKPOINT_START * BATCH_SIZE
     
-    dataset = ParquetDataset('datasets/arxiv2M.parquet',
+    dataset = ParquetDataset('datasets/arxivExceed512Tokens.parquet',
                              start_line, TYPE, crop=TEST, batch_size=BATCH_SIZE)
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, num_workers=4)
 
