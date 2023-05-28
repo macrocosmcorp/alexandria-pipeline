@@ -5,6 +5,6 @@ sudo apt install git-lfs
 git lfs install
 git lfs pull
 python -m pip install -r requirements.txt
-python run.py --type title --test
+python run_extra.py --type title --test
 
 # nvidia-smi -l 1
