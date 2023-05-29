@@ -34,7 +34,7 @@ class ParquetDataset(Dataset):
 
         row = self.data.iloc[idx]
         content = row[self.type]
-        id = row.id
+        id = row.doi
 
         return {"id": id, "content": content}
 
