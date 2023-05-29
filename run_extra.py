@@ -146,12 +146,9 @@ if __name__ == "__main__":
     # Load and process parquet
     batch_id, start_line = load_checkpoint(output_path)
 
-    # if CHECKPOINT_START != 0:
-    #     start_line = CHECKPOINT_START * BATCH_SIZE
-    
     dataset = ParquetDataset('datasets/arxivExceed512Tokens.parquet',
                              start_line, TYPE, crop=TEST, batch_size=BATCH_SIZE)
-    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, num_workers=4, drop_last=False)
+    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, num_workers=4)
 
     content_batch = []
     id_batch = []
@@ -178,5 +175,12 @@ if __name__ == "__main__":
             all_data = save_embeddings(output_path, batch_id, all_data)
             batch_id += 1
 
-    save_embeddings(output_path, batch_id, all_data)
+    # After the loop, if there's any remaining data
+    if content_batch:
+        content_prompt_batch = [[PROMPT, content] for content in content_batch]
+        content_embeddings = process_batch(content_prompt_batch)
 
+        for i in range(len(content_batch)):
+            all_data.append((content_batch[i], content_embeddings[i], id_batch[i]))
+
+        all_data = save_embeddings(output_path, batch_id, all_data)
