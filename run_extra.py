@@ -151,7 +151,7 @@ if __name__ == "__main__":
     
     dataset = ParquetDataset('datasets/arxivExceed512Tokens.parquet',
                              start_line, TYPE, crop=TEST, batch_size=BATCH_SIZE)
-    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, num_workers=4)
+    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, num_workers=4, drop_last=False)
 
     content_batch = []
     id_batch = []
