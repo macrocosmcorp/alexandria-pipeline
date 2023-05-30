@@ -171,16 +171,16 @@ if __name__ == "__main__":
             save_checkpoint(output_path, batch_id, line_num)
 
         if line_num % CHECKPOINT_SIZE == 0 and line_num != 0:
+            if content_batch:  # Check for remaining contents here before saving a checkpoint
+                content_prompt_batch = [[PROMPT, content] for content in content_batch]
+                content_embeddings = process_batch(content_prompt_batch)
+
+                for i in range(len(content_batch)):
+                    all_data.append((content_batch[i], content_embeddings[i], id_batch[i]))
+
+                content_batch = []
+                id_batch = []
+
             print(f'Saving checkpoint {batch_id}, progress {line_num}')
             all_data = save_embeddings(output_path, batch_id, all_data)
             batch_id += 1
-
-    # After the loop, if there's any remaining data
-    if content_batch:
-        content_prompt_batch = [[PROMPT, content] for content in content_batch]
-        content_embeddings = process_batch(content_prompt_batch)
-
-        for i in range(len(content_batch)):
-            all_data.append((content_batch[i], content_embeddings[i], id_batch[i]))
-
-        all_data = save_embeddings(output_path, batch_id, all_data)
