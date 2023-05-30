@@ -184,3 +184,19 @@ if __name__ == "__main__":
             print(f'Saving checkpoint {batch_id}, progress {line_num}')
             all_data = save_embeddings(output_path, batch_id, all_data)
             batch_id += 1
+
+    # After the main loop ends, check if there are any remaining contents
+    if content_batch:
+        content_prompt_batch = [[PROMPT, content] for content in content_batch]
+        content_embeddings = process_batch(content_prompt_batch)
+
+        for i in range(len(content_batch)):
+            all_data.append((content_batch[i], content_embeddings[i], id_batch[i]))
+
+        content_batch = []
+        id_batch = []
+
+        # Save the final checkpoint
+        print(f'Saving final checkpoint {batch_id}, progress {line_num}')
+        all_data = save_embeddings(output_path, batch_id, all_data)
+        save_checkpoint(output_path, batch_id, line_num)
