@@ -58,7 +58,7 @@ def process_batch(batch, max_tokens=512):
         tokens = tokenizer.tokenize(text)
 
         # Split text into sentences
-        sentences = nltk.sent_tokenize(text)
+        sentences = nltk.sent_tokenize(text[1])
         sentence_tokens = [tokenizer.tokenize(sentence) for sentence in sentences]
 
         # Split sentences into chunks of up to max_tokens tokens
