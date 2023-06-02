@@ -7,6 +7,8 @@ from transformers import AutoTokenizer
 import pyarrow.parquet as pq
 import os
 import numpy as np
+import nltk
+nltk.download('punkt')
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = INSTRUCTOR('hkunlp/instructor-xl', device=device)
@@ -45,7 +47,7 @@ def weighted_average_embedding(chunk_embeddings, text_chunks):
     weights = [len(chunk) for chunk in text_chunks]
     return np.average(chunk_embeddings, axis=0, weights=weights)
 
-def process_batch(batch):
+def process_batch(batch, max_tokens=512):
     start_time = time.time()
     # Initialize list for final embeddings
     final_embeddings = []
@@ -54,11 +56,22 @@ def process_batch(batch):
     for text in batch:
         # Tokenize the text
         tokens = tokenizer.tokenize(text)
-        # Split tokens into chunks of up to 512 tokens
-        text_chunks = [tokens[i:i + 512] for i in range(0, len(tokens), 512)]
 
+        # Split text into sentences
+        sentences = nltk.sent_tokenize(text)
+        sentence_tokens = [tokenizer.tokenize(sentence) for sentence in sentences]
+
+        # Split sentences into chunks of up to max_tokens tokens
+        token_chunks = []
+        for sentence in sentence_tokens:
+            sentence_len = len(sentence)
+            if sentence_len > max_tokens:
+                token_chunks.extend([sentence[i:i + max_tokens] for i in range(0, sentence_len, max_tokens)])
+            else:
+                token_chunks.append(sentence)
+        
         # Convert chunks back into text
-        text_chunks = [' '.join(chunk) for chunk in text_chunks]
+        text_chunks = [' '.join(chunk) for chunk in token_chunks]
 
         # Embed each chunk and calculate their weighted average
         chunk_embeddings = model.encode(text_chunks)
