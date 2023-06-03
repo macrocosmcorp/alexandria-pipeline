@@ -161,7 +161,7 @@ if __name__ == "__main__":
 
     dataset = ParquetDataset('datasets/missing_papers1.parquet',
                              start_line, TYPE, crop=TEST, batch_size=BATCH_SIZE)
-    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, num_workers=0)
+    dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, num_workers=4)
 
     content_batch = []
     id_batch = []
