@@ -22,7 +22,7 @@ class ParquetDataset(Dataset):
         self.crop = crop
         self.type = type
         self.batch_size = batch_size
-        self.data = pd.read_parquet(self.parquet_path)
+        self.data = pd.read_parquet(self.parquet_path, engine='fastparquet')
 
         if self.crop and self.batch_size is not None:
             self.data = self.data[:self.batch_size * 2]
