@@ -8,6 +8,7 @@ import pyarrow.parquet as pq
 import os
 import numpy as np
 import nltk
+import pandas as pd
 nltk.download('punkt')
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -21,8 +22,7 @@ class ParquetDataset(Dataset):
         self.crop = crop
         self.type = type
         self.batch_size = batch_size
-        self.table = pq.read_table(self.parquet_path)
-        self.data = self.table.to_pandas()
+        self.data = pd.read_parquet(self.parquet_path)
 
         if self.crop and self.batch_size is not None:
             self.data = self.data[:self.batch_size * 2]
