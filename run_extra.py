@@ -159,7 +159,7 @@ if __name__ == "__main__":
     # Load and process parquet
     batch_id, start_line = load_checkpoint(output_path)
 
-    dataset = ParquetDataset('datasets/missedPapers.parquet',
+    dataset = ParquetDataset('datasets/missing_papers.parquet',
                              start_line, TYPE, crop=TEST, batch_size=BATCH_SIZE)
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, num_workers=4)
 
