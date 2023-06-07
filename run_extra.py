@@ -13,6 +13,7 @@ nltk.download('punkt')
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = INSTRUCTOR('hkunlp/instructor-xl')
+tokenizer = AutoTokenizer.from_pretrained('hkunlp/instructor-xl')
 
 
 class ParquetDataset(Dataset):
@@ -41,9 +42,6 @@ class ParquetDataset(Dataset):
 
         return {"id": id, "content": content}
 
-
-tokenizer = AutoTokenizer.from_pretrained('hkunlp/instructor-xl')
-
 # calculate the weighted average of embeddings
 
 
@@ -59,9 +57,6 @@ def process_batch(batch, max_tokens=512):
 
     # Iterate over each text in the batch
     for text in batch:
-        # Tokenize the text
-        tokens = tokenizer.tokenize(text)
-
         # Split text into sentences
         sentences = nltk.sent_tokenize(text[1])
         sentence_tokens = [tokenizer.tokenize(
@@ -78,7 +73,8 @@ def process_batch(batch, max_tokens=512):
                 token_chunks.append(sentence)
 
         # Convert chunks back into text
-        text_chunks = [[text[0], ' '.join(chunk)] for chunk in token_chunks]
+        text_chunks = [' '.join(chunk) for chunk in token_chunks]
+        print("text_chunks", text_chunks)
 
         # Embed each chunk and calculate their weighted average
         chunk_embeddings = model.encode(text_chunks)
