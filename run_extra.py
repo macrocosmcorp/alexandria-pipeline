@@ -9,9 +9,9 @@ from transformers import AutoTokenizer
 import pyarrow.parquet as pq
 import numpy as np
 import nltk
+from langchain.text_splitter import CharacterTextSplitter
 nltk.download('punkt')
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = INSTRUCTOR('hkunlp/instructor-xl')
 tokenizer = AutoTokenizer.from_pretrained('hkunlp/instructor-xl')
 
@@ -46,7 +46,7 @@ class ParquetDataset(Dataset):
 
 
 def weighted_average_embedding(chunk_embeddings, text_chunks):
-    weights = [len(chunk) for chunk in text_chunks]
+    weights = [len(chunk[1]) for chunk in text_chunks]
     return np.average(chunk_embeddings, axis=0, weights=weights)
 
 
@@ -55,39 +55,26 @@ def process_batch(batch, max_tokens=512):
     # Initialize list for final embeddings
     final_embeddings = []
 
-    # Iterate over each text in the batch
+    # Iterate over each text in the batch, text[0] is prompt, text[1] is content
     for text in batch:
-        # Split text into sentences
-        sentences = nltk.sent_tokenize(text[1])
-        sentence_tokens = [tokenizer.tokenize(
-            sentence) for sentence in sentences]
+        text_splitter = CharacterTextSplitter.from_huggingface_tokenizer(
+            tokenizer, chunk_size=max_tokens, chunk_overlap=0)
+        text_chunks = [[text[0], chunk]
+                       for chunk in text_splitter.split_text(text)]
 
-        # Split sentences into chunks of up to max_tokens tokens
-        token_chunks = []
-        for sentence in sentence_tokens:
-            sentence_len = len(sentence)
-            if sentence_len > max_tokens:
-                token_chunks.extend([sentence[i:i + max_tokens]
-                                    for i in range(0, sentence_len, max_tokens)])
-            else:
-                token_chunks.append(sentence)
-
-        # Convert chunks back into text
-        text_chunks = [' '.join(chunk) for chunk in token_chunks]
         print("text_chunks", text_chunks)
 
         # Embed each chunk and calculate their weighted average
         chunk_embeddings = model.encode(text_chunks)
         final_embedding = weighted_average_embedding(
             chunk_embeddings, text_chunks)
-        print("this is a final embed", final_embedding)
         final_embeddings.append(final_embedding)
 
     end_time = time.time()
     elapsed_time = end_time - start_time
     speed = len(batch) / elapsed_time
     print(
-        f"Processed {len(batch)} abstracts in {elapsed_time:.2f} seconds ({speed:.2f} articles/second)")
+        f"Processed {len(batch)} entries in {elapsed_time:.2f} seconds ({speed:.2f} entries/second)")
     return final_embeddings  # Return the list of final embeddings
 
 
@@ -139,7 +126,7 @@ if __name__ == "__main__":
     elif TYPE == 'abstract':
         PROMPT = "Represent the Research Paper abstract for retrieval; Input:"
     elif TYPE == 'text':
-        PROMPT = "Represent the Case Law opinion for retrieval: "
+        PROMPT = "Represent the Case Law Opinion document for retrieval: "
     else:
         print("Invalid embed type")
         exit(1)
@@ -170,57 +157,28 @@ if __name__ == "__main__":
                              TYPE, crop=TEST, batch_size=BATCH_SIZE)
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, num_workers=4)
 
-    content_batch = []
-    id_batch = []
     all_data = []
 
+    # Each data entry is a batch of size BATCH_SIZE
     for line_num, data in enumerate(dataloader, start_line):
-        content_batch += data['content']
-        id_batch += data['id']
-
-        if len(content_batch) == BATCH_SIZE:
-            content_prompt_batch = [[PROMPT, content]
-                                    for content in content_batch]
-            content_embeddings = process_batch(content_prompt_batch)
-
-            for i in range(len(content_batch)):
-                all_data.append(
-                    (content_batch[i], content_embeddings[i], id_batch[i]))
-
-            content_batch = []
-            id_batch = []
-            save_checkpoint(output_path, batch_id, line_num)
-
-        if line_num % CHECKPOINT_SIZE == 0 and line_num != 0:
-            if content_batch:  # Check for remaining contents here before saving a checkpoint
-                content_prompt_batch = [[PROMPT, content]
-                                        for content in content_batch]
-                content_embeddings = process_batch(content_prompt_batch)
-
-                for i in range(len(content_batch)):
-                    all_data.append(
-                        (content_batch[i], content_embeddings[i], id_batch[i]))
-
-                content_batch = []
-                id_batch = []
-
-            print(f'Saving checkpoint {batch_id}, progress {line_num}')
-            all_data = save_embeddings(output_path, batch_id, all_data)
-            batch_id += 1
-
-    # After the main loop ends, check if there are any remaining contents
-    if content_batch:
-        content_prompt_batch = [[PROMPT, content] for content in content_batch]
+        content_batch = data['content']
+        id_batch = data['id']
+        print(f'Processing batch {line_num}')
+        content_prompt_batch = [[PROMPT, content]
+                                for content in content_batch]
         content_embeddings = process_batch(content_prompt_batch)
 
         for i in range(len(content_batch)):
             all_data.append(
                 (content_batch[i], content_embeddings[i], id_batch[i]))
 
-        content_batch = []
-        id_batch = []
+        if line_num % CHECKPOINT_SIZE == 0 and line_num != 0:
+            print(f'Saving checkpoint {batch_id}, progress {line_num}')
+            save_checkpoint(output_path, batch_id, line_num)
+            all_data = save_embeddings(output_path, batch_id, all_data)
+            batch_id += 1
 
-        # Save the final checkpoint
-        print(f'Saving final checkpoint {batch_id}, progress {line_num}')
-        all_data = save_embeddings(output_path, batch_id, all_data)
-        save_checkpoint(output_path, batch_id, line_num)
+    # Save the final checkpoint
+    print(f'Saving final checkpoint {batch_id}, progress {len(dataloader)}')
+    all_data = save_embeddings(output_path, batch_id, all_data)
+    save_checkpoint(output_path, batch_id, len(dataloader))
