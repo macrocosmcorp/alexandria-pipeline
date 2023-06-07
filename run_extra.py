@@ -9,7 +9,6 @@ from transformers import AutoTokenizer
 import pyarrow.parquet as pq
 import numpy as np
 import nltk
-from langchain.text_splitter import CharacterTextSplitter
 nltk.download('punkt')
 
 model = INSTRUCTOR('hkunlp/instructor-xl')
@@ -42,6 +41,22 @@ class ParquetDataset(Dataset):
 
         return {"id": id, "content": content}
 
+
+def handle_long_sentence(sentence, text_chunks, max_tokens):
+    # recursively split long sentences into smaller chunks until they are all under max_tokens in a very dumb way
+    sentence_len = len(tokenizer.tokenize(sentence))
+    if sentence_len > max_tokens:
+        # split sentence in half
+        half_len = len(sentence) // 2
+        first_half = sentence[:half_len]
+        second_half = sentence[half_len:]
+
+        # recursively split each half
+        handle_long_sentence(first_half, text_chunks, max_tokens)
+        handle_long_sentence(second_half, text_chunks, max_tokens)
+    else:
+        text_chunks.append([sentence])
+
 # calculate the weighted average of embeddings
 
 
@@ -57,12 +72,40 @@ def process_batch(batch, max_tokens=512):
 
     # Iterate over each text in the batch, text[0] is prompt, text[1] is content
     for text in batch:
-        text_splitter = CharacterTextSplitter.from_huggingface_tokenizer(
-            tokenizer, chunk_size=max_tokens, chunk_overlap=0)
-        text_chunks = [[text[0], chunk]
-                       for chunk in text_splitter.split_text(text)]
+        if text == "":
+            continue
+        # Split text into sentences
+        sentences = nltk.sent_tokenize(text[1])
 
-        print("text_chunks", text_chunks)
+        # Split text into chunks of up to max_tokens tokens by sentences
+        text_chunks = []
+        text_chunk = []
+        chunk_len = 0
+        for sentence in sentences:
+            sentence_len = len(tokenizer.tokenize(sentence))
+
+            # Sentences over max_tokens are split into their own chunks
+            if sentence_len > max_tokens:
+                if text_chunk:
+                    text_chunks.append(text_chunk)
+                    text_chunk = []
+                    chunk_len = 0
+                handle_long_sentence(sentence, text_chunks, max_tokens)
+                continue
+
+            if chunk_len + sentence_len <= max_tokens:
+                text_chunk.append(sentence)
+                chunk_len += sentence_len
+            else:
+                text_chunks.append(text_chunk)
+                text_chunk = [sentence]
+                chunk_len = sentence_len
+
+        if text_chunk:
+            text_chunks.append(text_chunk)
+
+        # Convert chunks back into text
+        text_chunks = [[text[0], ' '.join(chunk)] for chunk in text_chunks]
 
         # Embed each chunk and calculate their weighted average
         chunk_embeddings = model.encode(text_chunks)
@@ -126,7 +169,7 @@ if __name__ == "__main__":
     elif TYPE == 'abstract':
         PROMPT = "Represent the Research Paper abstract for retrieval; Input:"
     elif TYPE == 'text':
-        PROMPT = "Represent the Case Law Opinion document for retrieval: "
+        PROMPT = "Represent the US Judicial Opinion document for retrieval: "
     else:
         print("Invalid embed type")
         exit(1)
