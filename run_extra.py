@@ -65,16 +65,15 @@ def weighted_average_embedding(chunk_embeddings, text_chunks):
     return np.average(chunk_embeddings, axis=0, weights=weights)
 
 
-def process_batch(batch, max_tokens=512):
+def process_batch(batch, id_batch, max_tokens=512):
     start_time = time.time()
     # Initialize list for final embeddings
     final_embeddings = []
+    empty_entries = []
 
     # This is the bottelneck, need to figure out how to parallelize this
     # Iterate over each text in the batch, text[0] is prompt, text[1] is content
-    for text in batch:
-        if text == "":
-            continue
+    for i, text in enumerate(batch):
         # Split text into sentences
         sentences = nltk.sent_tokenize(text[1])
 
@@ -108,11 +107,22 @@ def process_batch(batch, max_tokens=512):
         # Convert chunks back into text
         text_chunks = [[text[0], ' '.join(chunk)] for chunk in text_chunks]
 
+        if len(text_chunks) == 0:
+            empty_entries.append(i)
+            continue
+
         # Embed each chunk and calculate their weighted average
         chunk_embeddings = model.encode(text_chunks)
         final_embedding = weighted_average_embedding(
             chunk_embeddings, text_chunks)
         final_embeddings.append(final_embedding)
+
+    # Remove empty entries from id_batch and batch
+    id_batch = [id_batch[i]
+                for i in range(len(id_batch)) if i not in empty_entries]
+    batch = [batch[i] for i in range(len(batch)) if i not in empty_entries]
+    assert len(id_batch) == len(batch) == len(
+        final_embeddings), "Lengths of id_batch, batch, and final_embeddings do not match"
 
     end_time = time.time()
     elapsed_time = end_time - start_time
@@ -144,7 +154,7 @@ def save_embeddings(output_path, checkpoint_id, all_data):
 def get_output_path(id):
     path = 'embeddings/instance_' + str(id) + '/'
     if os.path.exists(path):
-        return get_output_path(id + 1)
+        return path
     else:
         os.makedirs(path)
         return path
@@ -158,6 +168,7 @@ if __name__ == "__main__":
     parser.add_argument('--type', type=str, required=True)
     parser.add_argument('--dataset_path', type=str, required=True)
     parser.add_argument('--test', action='store_true')
+    parser.add_argument('--instance', type=int, default=0)
     args = parser.parse_args()
 
     BATCH_SIZE = args.batch_size
@@ -177,8 +188,9 @@ if __name__ == "__main__":
 
     DATASET_PATH = args.dataset_path
     TEST = args.test
+    INSTANCE = args.instance
 
-    output_path = get_output_path(0)
+    output_path = get_output_path(INSTANCE)
     print("Using output path:", output_path)
 
     print("Using test option?", TEST)
@@ -203,7 +215,7 @@ if __name__ == "__main__":
 
     all_data = []
     start_batch = start_line // BATCH_SIZE
-    num_batches = len(dataloader)
+    num_batches = len(dataloader) // BATCH_SIZE
 
     # Each batch is of size BATCH_SIZE
     for batch_num, batch in enumerate(dataloader, start_batch):
@@ -213,7 +225,7 @@ if __name__ == "__main__":
             f'Processing batch {batch_num}, progress {batch_num // num_batches * 100:.2f}%')
         content_prompt_batch = [[PROMPT, content]
                                 for content in content_batch]
-        content_embeddings = process_batch(content_prompt_batch)
+        content_embeddings = process_batch(content_prompt_batch, id_batch)
 
         for i in range(len(content_batch)):
             all_data.append(
