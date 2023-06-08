@@ -70,6 +70,7 @@ def process_batch(batch, max_tokens=512):
     # Initialize list for final embeddings
     final_embeddings = []
 
+    # This is the bottelneck, need to figure out how to parallelize this
     # Iterate over each text in the batch, text[0] is prompt, text[1] is content
     for text in batch:
         if text == "":
@@ -129,13 +130,13 @@ def load_checkpoint(output_path):
         return 0, 0  # default values
 
 
-def save_checkpoint(output_path, batch_id, line_num):
+def save_checkpoint(output_path, checkpoint_id, line_num):
     with open(f'{output_path}checkpoint.pkl', 'wb') as f:
-        pickle.dump((batch_id, line_num), f)
+        pickle.dump((checkpoint_id, line_num), f)
 
 
-def save_embeddings(output_path, batch_id, all_data):
-    with open(f'{output_path}embeddings_{batch_id}.pkl', 'wb') as f:
+def save_embeddings(output_path, checkpoint_id, all_data):
+    with open(f'{output_path}embeddings_{checkpoint_id}.pkl', 'wb') as f:
         pickle.dump(all_data, f, protocol=pickle.HIGHEST_PROTOCOL)
     return []
 
@@ -193,20 +194,23 @@ if __name__ == "__main__":
     print("Batch size: {}".format(BATCH_SIZE))
     print("Checkpoint size: {}".format(CHECKPOINT_SIZE))
 
-    # Load and process parquet
-    batch_id, start_line = load_checkpoint(output_path)
+    checkpoint_id, start_line = load_checkpoint(output_path)
 
+    # Load and process parquet
     dataset = ParquetDataset(DATASET_PATH, start_line,
                              TYPE, crop=TEST, batch_size=BATCH_SIZE)
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, num_workers=4)
 
     all_data = []
+    start_batch = start_line // BATCH_SIZE
+    num_batches = len(dataloader)
 
-    # Each data entry is a batch of size BATCH_SIZE
-    for line_num, data in enumerate(dataloader, start_line):
-        content_batch = data['content']
-        id_batch = data['id']
-        print(f'Processing batch {line_num}')
+    # Each batch is of size BATCH_SIZE
+    for batch_num, batch in enumerate(dataloader, start_batch):
+        content_batch = batch['content']
+        id_batch = batch['id']
+        print(
+            f'Processing batch {batch_num}, progress {batch_num // num_batches * 100:.2f}%')
         content_prompt_batch = [[PROMPT, content]
                                 for content in content_batch]
         content_embeddings = process_batch(content_prompt_batch)
@@ -215,13 +219,13 @@ if __name__ == "__main__":
             all_data.append(
                 (content_batch[i], content_embeddings[i], id_batch[i]))
 
-        if line_num % CHECKPOINT_SIZE == 0 and line_num != 0:
-            print(f'Saving checkpoint {batch_id}, progress {line_num}')
-            save_checkpoint(output_path, batch_id, line_num)
-            all_data = save_embeddings(output_path, batch_id, all_data)
-            batch_id += 1
+        if batch_num % CHECKPOINT_SIZE == 0 and batch_num != 0:
+            print(f'Saving checkpoint {checkpoint_id}')
+            save_checkpoint(output_path, checkpoint_id, batch_num * BATCH_SIZE)
+            all_data = save_embeddings(output_path, checkpoint_id, all_data)
+            checkpoint_id += 1
 
     # Save the final checkpoint
-    print(f'Saving final checkpoint {batch_id}, progress {len(dataloader)}')
-    all_data = save_embeddings(output_path, batch_id, all_data)
-    save_checkpoint(output_path, batch_id, len(dataloader))
+    print(f'Saving final checkpoint {checkpoint_id}')
+    all_data = save_embeddings(output_path, checkpoint_id, all_data)
+    save_checkpoint(output_path, checkpoint_id, num_batches * BATCH_SIZE)
