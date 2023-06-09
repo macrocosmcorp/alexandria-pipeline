@@ -28,6 +28,9 @@ class ParquetDataset(Dataset):
         if self.crop and self.batch_size is not None:
             self.data = self.data[:self.batch_size * 2]
 
+        if self.start_line > 0 and self.batch_size is not None:
+            self.data = self.data[self.start_line:]
+
     def __len__(self):
         return len(self.data)
 
@@ -215,14 +218,17 @@ if __name__ == "__main__":
 
     all_data = []
     start_batch = start_line // BATCH_SIZE
-    num_batches = len(dataloader) // BATCH_SIZE
+    num_batches = len(dataloader)
+    total_batches = num_batches + start_batch
+    print(f'Loaded {num_batches} batches')
+    print(f'Starting at batch {start_batch}')
 
     # Each batch is of size BATCH_SIZE
     for batch_num, batch in enumerate(dataloader, start_batch):
         content_batch = batch['content']
         id_batch = batch['id']
         print(
-            f'Processing batch {batch_num}, progress {batch_num // num_batches * 100:.2f}%')
+            f'Processing batch {batch_num}, progress: {batch_num / total_batches * 100:.2f}%')
         content_prompt_batch = [[PROMPT, content]
                                 for content in content_batch]
         content_embeddings = process_batch(content_prompt_batch, id_batch)
@@ -233,11 +239,13 @@ if __name__ == "__main__":
 
         if batch_num % CHECKPOINT_SIZE == 0 and batch_num != 0:
             print(f'Saving checkpoint {checkpoint_id}')
-            save_checkpoint(output_path, checkpoint_id, batch_num * BATCH_SIZE)
+            save_checkpoint(output_path, checkpoint_id,
+                            (batch_num + 1) * BATCH_SIZE)
             all_data = save_embeddings(output_path, checkpoint_id, all_data)
             checkpoint_id += 1
 
     # Save the final checkpoint
     print(f'Saving final checkpoint {checkpoint_id}')
     all_data = save_embeddings(output_path, checkpoint_id, all_data)
-    save_checkpoint(output_path, checkpoint_id, num_batches * BATCH_SIZE)
+    save_checkpoint(output_path, checkpoint_id,
+                    (total_batches + 1) * BATCH_SIZE)
