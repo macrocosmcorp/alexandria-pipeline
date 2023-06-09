@@ -12,10 +12,15 @@ with jsonlines.open(input_path) as reader:
         opinions = obj['casebody']['data']['opinions']
         for opinion in opinions:
             text = opinion['text']
+            # Maybe introduce a minimum length requirement?
+            if text is None or text == '':
+                continue
             data.append({'id': id, 'text': text})
         if i % 1000 == 0:
             print(f'Processed {i} cases')
     df = pd.DataFrame(data)
+
+df.dropna(inplace=True)
 
 # Write the DataFrame to a Parquet file
 df.to_parquet(output_path)

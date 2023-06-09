@@ -75,10 +75,10 @@ def process_batch(batch, id_batch, max_tokens=512):
     empty_entries = []
 
     # This is the bottelneck, need to figure out how to parallelize this
-    # Iterate over each text in the batch, text[0] is prompt, text[1] is content
+    # Iterate over each text in the batch
     for i, text in enumerate(batch):
         # Split text into sentences
-        sentences = nltk.sent_tokenize(text[1])
+        sentences = nltk.sent_tokenize(text)
 
         # Split text into chunks of up to max_tokens tokens by sentences
         text_chunks = []
@@ -108,7 +108,7 @@ def process_batch(batch, id_batch, max_tokens=512):
             text_chunks.append(text_chunk)
 
         # Convert chunks back into text
-        text_chunks = [[text[0], ' '.join(chunk)] for chunk in text_chunks]
+        text_chunks = [[PROMPT, ' '.join(chunk)] for chunk in text_chunks]
 
         if len(text_chunks) == 0:
             empty_entries.append(i)
@@ -121,11 +121,9 @@ def process_batch(batch, id_batch, max_tokens=512):
         final_embeddings.append(final_embedding)
 
     # Remove empty entries from id_batch and batch
-    id_batch = [id_batch[i]
-                for i in range(len(id_batch)) if i not in empty_entries]
-    batch = [batch[i] for i in range(len(batch)) if i not in empty_entries]
-    assert len(id_batch) == len(batch) == len(
-        final_embeddings), "Lengths of id_batch, batch, and final_embeddings do not match"
+    for i in sorted(empty_entries, reverse=True):
+        del id_batch[i]
+        del batch[i]
 
     end_time = time.time()
     elapsed_time = end_time - start_time
@@ -229,17 +227,15 @@ if __name__ == "__main__":
         id_batch = batch['id']
         print(
             f'Processing batch {batch_num}, progress: {batch_num / total_batches * 100:.2f}%')
-        content_prompt_batch = [[PROMPT, content]
-                                for content in content_batch]
-        content_embeddings = process_batch(content_prompt_batch, id_batch)
+        content_embeddings = process_batch(content_batch, id_batch)
 
         for i in range(len(content_batch)):
             all_data.append(
                 (content_batch[i], content_embeddings[i], id_batch[i]))
 
-        if batch_num % CHECKPOINT_SIZE == 0 and batch_num != 0:
+        if (batch_num + 1) % CHECKPOINT_SIZE == 0:
             print(f'Saving checkpoint {checkpoint_id}')
-            save_checkpoint(output_path, checkpoint_id,
+            save_checkpoint(output_path, checkpoint_id + 1,
                             (batch_num + 1) * BATCH_SIZE)
             all_data = save_embeddings(output_path, checkpoint_id, all_data)
             checkpoint_id += 1
@@ -247,5 +243,5 @@ if __name__ == "__main__":
     # Save the final checkpoint
     print(f'Saving final checkpoint {checkpoint_id}')
     all_data = save_embeddings(output_path, checkpoint_id, all_data)
-    save_checkpoint(output_path, checkpoint_id,
+    save_checkpoint(output_path, checkpoint_id + 1,
                     (total_batches + 1) * BATCH_SIZE)
