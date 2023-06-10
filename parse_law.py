@@ -21,6 +21,8 @@ with jsonlines.open(input_path) as reader:
     df = pd.DataFrame(data)
 
 df.dropna(inplace=True)
+df.drop_duplicates(subset=['text'], inplace=True)
+print(f'len(data): {len(df)}')
 
 # Write the DataFrame to a Parquet file
 df.to_parquet(output_path)
