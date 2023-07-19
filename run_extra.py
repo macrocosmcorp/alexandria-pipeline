@@ -60,9 +60,8 @@ def handle_long_sentence(sentence, text_chunks, max_tokens):
     else:
         text_chunks.append([sentence])
 
+
 # calculate the weighted average of embeddings
-
-
 def weighted_average_embedding(chunk_embeddings, text_chunks):
     weights = [len(chunk[1]) for chunk in text_chunks]
     return np.average(chunk_embeddings, axis=0, weights=weights)

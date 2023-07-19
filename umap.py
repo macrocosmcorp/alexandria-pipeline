@@ -12,5 +12,7 @@ output_path = './embeddings/ill_opinions.pkl'
 data = load_embedding(output_path)
 embeddings = [d[1] for d in data]
 embeddings = np.array(embeddings)
+metadata = [{'opinion': d[0], 'id': d[2]} for d in data]
 
-project = atlas.map_embeddings(embeddings=embeddings)
+project = atlas.map_embeddings(
+    embeddings=embeddings, data=metadata, name='quarrelsome-entirety', reset_project_if_exists=True)
